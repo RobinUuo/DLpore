@@ -1,0 +1,17 @@
+.idea/
+sliceim_seed0/
+sliceim_seed10/
+sliceim_seed100/
+__pycache__/
+utils/
+deeplearning.mplstyle
+dlfibernet.py
+fibernetAI4.py
+fibernetAI4resnet18.py
+fibernetsim.py
+fluxinorder.py
+model_test.py
+resnet50.pth
+test.py
+train_mse.png
+try.py

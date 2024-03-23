@@ -61,7 +61,6 @@ class Resnet(nn.Module):
         self.groups = groups
         self.width_per_group = width_per_group
         self.in_channel = 64
-        self.pre_due = nn.ZeroPad3d(3)  # 保留边界
         self.conv1 = nn.Conv3d(1, out_channels=self.in_channel, kernel_size=7,
                                stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm3d(self.in_channel)
@@ -72,30 +71,26 @@ class Resnet(nn.Module):
         self.stage3 = self.__make_layer(128, blocks_num[1], stride=2)
         self.stage4 = self.__make_layer(256, blocks_num[2], stride=2)
         self.stage5 = self.__make_layer(512, blocks_num[3], stride=2)
+        self.avg = nn.AvgPool3d(2)
 
         self.out1 = nn.Sequential(
-            nn.AvgPool3d(2),
             nn.Flatten(),
             nn.Linear(2048, 512),
             nn.ReLU(),
-            nn.Dropout(0.5),
             nn.Linear(512, 1)
         )
         self.out2 = nn.Sequential(
-            nn.AvgPool3d(2),
             nn.Flatten(),
             nn.Linear(2048, 512),
             nn.ReLU(),
-            nn.Dropout(0.5),
             nn.Linear(512, 1)
         )
-
-        # self.avgpool = nn.AvgPool3d(2)
-        # self.fc = nn.Flatten()
-        # self.line1 = nn.Linear(2048, 512)
-        # self.act1 = nn.ReLU
-        # self.drop = nn.Dropout(0.5)
-        # self.line2 = nn.Linear(512, 2)
+        for m in self.modules():
+            if isinstance(m, nn.Conv3d):
+                m.weight = nn.init.kaiming_normal(m.weight, mode='fan_out')
+            elif isinstance(m, nn.BatchNorm3d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
 
     def __make_layer(self, first_channel, block_num, stride=1):
         # 第三层单独的卷积深度是一二层的4倍
@@ -124,7 +119,6 @@ class Resnet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        x = self.pre_due(x)
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -135,10 +129,12 @@ class Resnet(nn.Module):
         x = self.stage4(x)
         x = self.stage5(x)
 
+        x = self.avg(x)
         # x = self.out(x)
         x1 = self.out1(x)
+        x1 = x1.squeeze(-1)
         x2 = self.out2(x)
-
+        x2 = x2.squeeze(-1)
         return x1, x2
 
 
@@ -152,9 +148,3 @@ def resnet101():
 
 def resnet151():
     return Resnet([3, 8, 36, 3], True)
-
-# input1 = torch.rand(64, 1, 64, 64, 64)
-# model = resnet50()
-# a, b = model(input1)
-# print(a)
-# print(b)

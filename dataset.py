@@ -65,4 +65,4 @@ train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(data, [
 
 train_loader = DataLoader(dataset=train_dataset, batch_size=64, shuffle=True)
 val_loader = DataLoader(dataset=val_dataset, batch_size=64, shuffle=False)
-test_loader = DataLoader(dataset=test_dataset, batch_size=64, shuffle=False)
+test_loader = DataLoader(dataset=test_dataset, batch_size=64, shuffle=False, drop_last=True)
