@@ -3,7 +3,7 @@ import os
 
 import torch.optim
 from dataset import train_loader, val_loader
-from resnetModel import resnet50, resnet101
+from resnetModel import resnet50, resnet101, resnet151
 import torch.nn as nn
 import numpy as np
 from tqdm import tqdm
@@ -13,7 +13,12 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 structure = '50'
-net = resnet50()
+if structure == '50':
+    net = resnet50()
+elif structure == '101':
+    net = resnet101()
+else:
+    net = resnet151()
 net = net.to(device)
 epochs = 100
 
@@ -25,6 +30,7 @@ adve_output_loss = []
 val_adve_output_loss = []
 total_output_loss = []
 val_total_output_loss = []
+best_epoch = [0, 0, 0]
 
 loss_fn = nn.MSELoss()
 loss_fn = loss_fn.to(device)
@@ -42,6 +48,8 @@ for i in range(epochs):
     running_loss_adve = 0.0
 
     with tqdm(total=len(train_loader)) as t:
+        torch.autograd.set_detect_anomaly(True)
+
         for step, data in enumerate(train_loader, start=0):
             imgs, values = data
             imgs = imgs.to(device)
@@ -54,14 +62,6 @@ for i in range(epochs):
             loss_diff = loss_fn(logit1, diff_true_value)
             loss_adve = loss_fn(logit2, adve_true_value)
 
-            running_loss_diff += loss_diff.item()
-            running_loss_adve += loss_adve.item()
-            running_total_loss = loss_adve.item() + loss_diff.item()
-
-            t.set_description(desc='train Epoch {}/{}'.format(i + 1, epochs))
-            t.set_postfix(loss_diff=loss_diff.item(), loss_adve=loss_adve.item())
-            t.update(1)
-
             optimizer1.zero_grad()
             optimizer2.zero_grad()
 
@@ -69,6 +69,33 @@ for i in range(epochs):
             loss_adve.backward()
             optimizer1.step()
             optimizer2.step()
+            running_loss_diff += loss_diff.item()
+            running_loss_adve += loss_adve.item()
+
+            t.set_description(desc='train Epoch {}/{}'.format(i + 1, epochs))
+            t.set_postfix(loss_diff=running_loss_diff / (step + 1), loss_adve=running_loss_adve / (step + 1))
+            t.update(1)
+
+    # calculate three losses for each epoch in training
+    diff_avg_mse = running_loss_diff / len(train_loader)
+    adve_avg_mse = running_loss_adve / len(train_loader)
+    total_mse = diff_avg_mse + adve_avg_mse
+
+    # save the best weight for each
+    if diff_avg_mse < best_in_diff:
+        best_in_diff = diff_avg_mse
+        torch.save(net.state_dict(), './diff_resnet' + structure + '.pth')
+        best_epoch[0] = i + 1
+
+    if adve_avg_mse < best_in_adve:
+        best_in_adve = adve_avg_mse
+        torch.save(net.state_dict(), './adve_resnet' + structure + '.pth')
+        best_epoch[1] = i + 1
+
+    if total_mse < best_in_total:
+        best_in_total = total_mse
+        torch.save(net.state_dict(), './total_resnet' + structure + '.pth')
+        best_epoch[2] = i + 1
 
     net.eval()
     vailding_loss_diff = 0.0
@@ -76,7 +103,7 @@ for i in range(epochs):
 
     with torch.no_grad():
         with tqdm(total=len(val_loader)) as tq:
-            for val_data in val_loader:
+            for id, val_data in enumerate(val_loader):
                 val_images, val_values = val_data
                 val_images = val_images.to(device)
                 diff_val_true_value = val_values[0]
@@ -87,21 +114,18 @@ for i in range(epochs):
                 output1, output2 = net(val_images)
                 vloss_diff = loss_fn(output1, diff_val_true_value)
                 vloss_adve = loss_fn(output2, adve_val_true_value)
-                vailding_total_loss = vloss_diff.item() + vloss_adve.item()
 
                 vailding_loss_diff += vloss_diff.item()
                 vailding_loss_adve += vloss_adve.item()
 
                 tq.set_description(desc='vaild Epoch {}/{}'.format(i + 1, epochs))
-                tq.set_postfix(vloss_diff=vloss_diff.item(), vloss_adve=vloss_adve.item())
+                tq.set_postfix(vloss_diff=vailding_loss_diff / (id + 1), vloss_adve=vailding_loss_adve / (id + 1))
                 tq.update(1)
 
-    diff_avg_mse = running_loss_diff / len(train_loader)
-    adve_avg_mse = running_loss_adve / len(train_loader)
-    total_mse = running_total_loss / len(train_loader)
+    # calculate three losses for each epoch in vailding
     diff_avg_vaild_mse = vailding_loss_diff / len(val_loader)
     adve_avg_vaild_mse = vailding_loss_adve / len(val_loader)
-    val_total_mse = vailding_total_loss / len(val_loader)
+    val_total_mse = diff_avg_vaild_mse + adve_avg_vaild_mse
 
     # show in the PLT
     total_output_loss.append(total_mse)
@@ -111,18 +135,9 @@ for i in range(epochs):
     val_diff_output_loss.append(diff_avg_vaild_mse)
     val_adve_output_loss.append(adve_avg_vaild_mse)
 
-    # save the best weight for each
-    if diff_avg_mse < best_in_diff:
-        best_in_diff = diff_avg_mse
-        torch.save(net.state_dict(), './diff_resnet' + structure + '.pth')
-    if adve_avg_mse < best_in_adve:
-        best_in_adve = adve_avg_mse
-        torch.save(net.state_dict(), './adve_resnet' + structure + '.pth')
-    if total_mse < best_in_total:
-        best_in_total = total_mse
-        torch.save(net.state_dict(), './total_resnet' + structure + '.pth')
-
 print('Finished Training')
+print('diff:{};adve:{};total:{}'.format(best_epoch[0], best_epoch[1], best_epoch[2]))
+
 loss_dict = {
     'total': total_output_loss,
     'val_total': val_total_output_loss,
