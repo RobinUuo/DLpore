@@ -7,10 +7,6 @@ import porespy as ps
 import torch
 from PIL import Image
 from matplotlib import pyplot as plt
-from torch.utils.data import Dataset, DataLoader
-from tqdm import tqdm
-import time
-from sklearn.metrics import r2_score
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
@@ -24,7 +20,7 @@ rootdir = 'D:\dev\pythonProject\DL\sliceim_seed1110/'
 imagelist = os.listdir(rootdir)
 start = 20
 # start = 70
-end = 50
+end = 120
 ii = 0
 img = Image.open(rootdir + imagelist[0])
 img = np.array(img, dtype=bool)
@@ -60,6 +56,7 @@ throat_conns = net['throat.conns']
 throat_global_center = net['throat.global_peak']
 pore_centers = net['pore.coords']
 data, zm_ratios = ps.networks.create_inputs(regions, throat_conns)
+model.eval()
 with torch.no_grad():
     for inputs in data:
         inputs = inputs.to(device)

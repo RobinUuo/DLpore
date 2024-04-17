@@ -3,6 +3,9 @@ import torch
 import torchvision
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
+import random
+
+seed = True
 
 
 class MyDataset(Dataset):
@@ -61,6 +64,11 @@ data = MyDataset(['0', '10', '100'], transform=torchvision.transforms.ToTensor()
 train_size = int(len(data) * 0.8)
 val_size = int(len(data) * 0.1)
 test_size = len(data) - train_size - val_size
+
+if seed:
+    seed = 42
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
 train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(data, [train_size, val_size, test_size])
 
 train_loader = DataLoader(dataset=train_dataset, batch_size=64, shuffle=True)
